@@ -114,7 +114,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
                 let appName = DispatchQueue.main.sync { AppContext.frontmostAppName() }
 
-                var finalText = Cleanup.local(raw, dictionary: self.settings.dictionary)
+                var finalText = Cleanup.local(raw, fillers: self.settings.fillerWords,
+                                              dictionary: self.settings.dictionary)
                 if self.settings.aiCleanupEnabled {
                     DispatchQueue.main.async {
                         self.setStatus("Polishing…")

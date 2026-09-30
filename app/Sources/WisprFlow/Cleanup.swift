@@ -7,36 +7,61 @@ import Foundation
 ///   formatting tuned to the active app. Falls back to the local result on any
 ///   error or timeout, so dictation never breaks.
 enum Cleanup {
-    private static let fillers = ["um", "uh", "erm", "hmm", "like", "you know"]
+    private static func rx(_ s: String, _ pattern: String, _ repl: String,
+                           caseInsensitive: Bool = false) -> String {
+        var opts: NSString.CompareOptions = [.regularExpression]
+        if caseInsensitive { opts.insert(.caseInsensitive) }
+        return s.replacingOccurrences(of: pattern, with: repl, options: opts)
+    }
 
-    static func local(_ raw: String, dictionary: [String: String]) -> String {
+    static func local(_ raw: String, fillers: [String], dictionary: [String: String]) -> String {
         var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return text }
 
-        // Collapse runs of whitespace.
-        text = text.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
-
-        // Drop a leading filler word if present (only the first — conservative).
-        for f in fillers {
-            let prefix = f + " "
-            if text.lowercased().hasPrefix(prefix) {
-                text = String(text.dropFirst(prefix.count))
-                break
-            }
+        // Remove every filler word/phrase, anywhere, whole-word & case-insensitive.
+        // Longer phrases first so "you know" is handled before a bare "know" etc.
+        for f in fillers.sorted(by: { $0.count > $1.count }) {
+            let esc = NSRegularExpression.escapedPattern(for: f)
+            text = rx(text, "\\b\(esc)\\b", "", caseInsensitive: true)
         }
+
+        // Tidy the leftovers fillers leave behind.
+        text = rx(text, "\\s+([,.;:!?])", "$1")        // space before punctuation
+        text = rx(text, ",\\s*\\.", ".")               // ", ." -> "."
+        text = rx(text, "\\.\\s*,", ". ")              // ". ," -> ". "
+        text = rx(text, "([.!?])(\\s*[.!?])+", "$1")   // collapse repeated terminators (".." -> ".")
+        text = rx(text, "([,;:])(\\s*[,;:])+", "$1")   // collapse repeated separators
+        text = rx(text, "\\s+([,.;:!?])", "$1")        // re-tidy space before punctuation
+        text = rx(text, "\\s{2,}", " ")                // multiple spaces
+        text = rx(text, "^[\\s,;:.!?]+", "")            // stray leading punctuation/space
+        text = text.trimmingCharacters(in: .whitespacesAndNewlines)
 
         // Custom dictionary: case-insensitive whole-word replacement.
         for (from, to) in dictionary {
-            let pattern = "\\b" + NSRegularExpression.escapedPattern(for: from) + "\\b"
-            text = text.replacingOccurrences(of: pattern, with: to,
-                                             options: [.regularExpression, .caseInsensitive])
+            let esc = NSRegularExpression.escapedPattern(for: from)
+            text = rx(text, "\\b\(esc)\\b", to, caseInsensitive: true)
         }
 
-        // Capitalize the first letter.
-        if let first = text.first {
-            text.replaceSubrange(text.startIndex...text.startIndex, with: String(first).uppercased())
-        }
+        // Capitalize the standalone pronoun "i", then sentence starts.
+        text = rx(text, "\\bi\\b", "I")
+        text = capitalizeSentences(text)
         return text
+    }
+
+    /// Uppercases the first letter overall and after ., ?, or ! .
+    private static func capitalizeSentences(_ input: String) -> String {
+        var result = ""
+        var capNext = true
+        for ch in input {
+            if capNext, ch.isLetter {
+                result.append(Character(ch.uppercased()))
+                capNext = false
+            } else {
+                result.append(ch)
+                if ch == "." || ch == "?" || ch == "!" { capNext = true }
+            }
+        }
+        return result
     }
 
     /// Blocking AI cleanup. Returns nil on any failure so the caller can fall
