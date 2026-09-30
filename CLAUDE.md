@@ -1,10 +1,30 @@
-# Claude Code Template — Project Memory
+# Wispr Flow (macOS) — Project Memory
 
 ## Overview
 
-A comprehensive, opinionated Claude Code template. Designed to be installed
-as a plugin or forked as a starting point. Everything here aligns with the
-[official Claude Code docs](https://code.claude.com/docs/en/overview).
+**This repo builds Wispr Flow: a native macOS voice-dictation app.** Hold
+⌥Space, speak, release → cleaned-up text is inserted at the cursor in any app.
+Fully local speech recognition (whisper.cpp, Metal) with an optional Claude
+cleanup pass. Target: Apple Silicon, macOS 13+.
+
+The app lives under **`app/`** — see `app/README.md` for setup/run and
+`docs/wispr-flow-end-to-end.md` for the design research it's based on.
+
+- Stack: Swift 6 toolchain + AppKit menu-bar agent, built via SwiftPM (no
+  full Xcode). whisper.cpp installed via Homebrew; model resident in a
+  `whisper-server` subprocess. Claude cleanup via raw HTTPS (Swift has no
+  official SDK) — default model `claude-opus-4-8`, configurable.
+- Build: `cd app && ./scripts/setup.sh && ./scripts/build-app.sh`.
+- Needs Microphone + Accessibility permissions (granted once by the user).
+
+The `.claude/` directory below is the Claude Code development setup (agents,
+commands, hooks) scaffolded around the project — not part of the shipped app.
+
+## Claude Code dev setup (`.claude/`)
+
+The rest of this file documents the bundled Claude Code template
+(commands, subagents, skills, hooks, MCP) that wraps this project. It aligns
+with the [official Claude Code docs](https://code.claude.com/docs/en/overview).
 
 ## Directory map
 
