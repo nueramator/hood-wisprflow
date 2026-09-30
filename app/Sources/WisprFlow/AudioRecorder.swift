@@ -10,6 +10,10 @@ final class AudioRecorder {
     private let lock = NSLock()
     private(set) var isRecording = false
 
+    /// Smoothed 0…1 loudness, delivered on the main thread for the HUD meter.
+    var onLevel: ((Float) -> Void)?
+    private var smoothedLevel: Float = 0
+
     /// Requests mic access (prompts once). Completion on an arbitrary queue.
     func requestPermission(_ completion: @escaping (Bool) -> Void) {
         switch AVCaptureDevice.authorizationStatus(for: .audio) {
@@ -72,5 +76,17 @@ final class AudioRecorder {
         let count = Int(outBuffer.frameLength)
         let slice = Array(UnsafeBufferPointer(start: channel, count: count))
         lock.lock(); samples.append(contentsOf: slice); lock.unlock()
+
+        // RMS → perceptual 0…1 level for the meter, with attack/decay smoothing.
+        if let onLevel, count > 0 {
+            var sum: Float = 0
+            for s in slice { sum += s * s }
+            let rms = (sum / Float(count)).squareRoot()
+            let scaled = min(1.0, rms * 12.0).squareRoot()   // lift quiet speech
+            let coeff: Float = scaled > smoothedLevel ? 0.5 : 0.15   // fast attack, slow release
+            smoothedLevel += (scaled - smoothedLevel) * coeff
+            let out = smoothedLevel
+            DispatchQueue.main.async { onLevel(out) }
+        }
     }
 }

@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let recorder = AudioRecorder()
     private var whisper: WhisperEngine!
     private let hotkey = HotkeyMonitor()
+    private let hud = OverlayHUD()
 
     private var statusItem: NSStatusItem!
     private var statusMenuTitleItem: NSMenuItem!
@@ -56,9 +57,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func beginRecording() {
         guard engineReady, !recorder.isRecording else { return }
         do {
+            recorder.onLevel = { [weak self] in self?.hud.setLevel($0) }
             try recorder.start()
             setMenuBarSymbol(recording: true)
             setStatus("Listening… (release ⌥Space to insert)")
+            hud.show("Listening", phase: .listening)
         } catch {
             setStatus("⚠︎ Mic error: \(error.localizedDescription)")
         }
@@ -70,10 +73,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setMenuBarSymbol(recording: false)
 
         guard samples.count > 1600 else {   // < ~0.1s → ignore
+            hud.hide()
             setIdle()
             return
         }
         setStatus("Transcribing…")
+        hud.setStatus("Transcribing", phase: .working)
 
         workQueue.async {
             do {
@@ -84,7 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
                 let raw = try self.whisper.transcribe(wavURL: wavURL)
                 guard !raw.isEmpty else {
-                    DispatchQueue.main.async { self.setIdle() }
+                    DispatchQueue.main.async { self.hud.hide(); self.setIdle() }
                     return
                 }
 
@@ -92,7 +97,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
                 var finalText = Cleanup.local(raw, dictionary: self.settings.dictionary)
                 if self.settings.aiCleanupEnabled {
-                    DispatchQueue.main.async { self.setStatus("Polishing…") }
+                    DispatchQueue.main.async {
+                        self.setStatus("Polishing…")
+                        self.hud.setStatus("Polishing", phase: .working)
+                    }
                     if let polished = Cleanup.ai(finalText, appName: appName,
                                                  model: self.settings.cleanupModel) {
                         finalText = polished
@@ -102,10 +110,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 let toInsert = finalText
                 DispatchQueue.main.async {
                     TextInjector.insert(toInsert)
+                    self.hud.finish()
                     self.setIdle()
                 }
             } catch {
-                DispatchQueue.main.async { self.setStatus("⚠︎ \(error)") }
+                DispatchQueue.main.async { self.hud.hide(); self.setStatus("⚠︎ \(error)") }
             }
         }
     }
