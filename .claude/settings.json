@@ -1,0 +1,206 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+
+  "permissions": {
+    "defaultMode": "default",
+    "allow": [
+      "Bash(npm run:*)",
+      "Bash(npm test:*)",
+      "Bash(npm install:*)",
+      "Bash(npm ci:*)",
+      "Bash(npx:*)",
+      "Bash(yarn:*)",
+      "Bash(pnpm:*)",
+      "Bash(bun:*)",
+      "Bash(git:*)",
+      "Bash(gh:*)",
+      "Bash(docker:*)",
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(wc:*)",
+      "Bash(grep:*)",
+      "Bash(rg:*)",
+      "Bash(tree:*)",
+      "Bash(pytest:*)",
+      "Bash(python3:*)",
+      "Bash(pip:*)",
+      "Bash(make:*)",
+      "Bash(go test:*)",
+      "Bash(cargo:*)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(./secrets/**)",
+      "Read(**/*secret*)",
+      "Read(**/*credential*)",
+      "Read(**/id_rsa)",
+      "Read(**/id_ed25519)",
+      "Bash(rm -rf:*)",
+      "Bash(sudo:*)",
+      "Bash(curl:* | sh)",
+      "Bash(curl:* | bash)"
+    ]
+  },
+
+  "sandbox": {
+    "network": {
+      "deniedDomains": [
+        "metadata.google.internal",
+        "169.254.169.254"
+      ]
+    }
+  },
+
+  "statusLine": {
+    "type": "command",
+    "command": ".claude/statusline/statusline.sh",
+    "refreshInterval": 5
+  },
+
+  "prUrlTemplate": "https://github.com/{owner}/{repo}/pull/{number}",
+
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/log-hook-event.sh",
+            "description": "Log session start for analysis"
+          },
+          {
+            "type": "command",
+            "command": "bash scripts/hooks/inject-context.sh",
+            "description": "Inject project context (branch, recent commits)"
+          }
+        ]
+      }
+    ],
+
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/log-hook-event.sh",
+            "description": "Log PreToolUse events"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "if": "Bash(*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/hooks/block-dangerous-bash.sh",
+            "description": "Block destructive bash patterns"
+          }
+        ]
+      }
+    ],
+
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/log-hook-event.sh",
+            "description": "Log PostToolUse events (now includes duration_ms)"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/hooks/format-on-save.sh",
+            "description": "Run formatter on edited files"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|Read|Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/hooks/redact-secrets.sh",
+            "description": "Redact secret-shaped strings from tool output before the model sees it"
+          }
+        ]
+      }
+    ],
+
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/hooks/pre-compact.sh",
+            "description": "Save a checkpoint before compaction drops context"
+          }
+        ]
+      }
+    ],
+
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/log-hook-event.sh",
+            "description": "Log user prompts"
+          }
+        ]
+      }
+    ],
+
+    "Notification": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/log-hook-event.sh",
+            "description": "Log notifications"
+          }
+        ]
+      }
+    ],
+
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/log-hook-event.sh",
+            "description": "Log session end"
+          },
+          {
+            "type": "command",
+            "command": "bash scripts/hooks/session-cost.sh",
+            "description": "Surface session cost summary plus per-tool timing"
+          }
+        ]
+      }
+    ]
+  },
+
+  "env": {
+    "NODE_ENV": "development"
+  },
+
+  "includeCoAuthoredBy": true,
+  "cleanupPeriodDays": 30,
+
+  "enableAllProjectMcpServers": false,
+  "enabledMcpjsonServers": ["filesystem", "git", "fetch"]
+}

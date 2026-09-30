@@ -1,0 +1,30 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "."],
+      "alwaysLoad": true,
+      "description": "Sandboxed filesystem access rooted at the project directory. alwaysLoad=true so its tools skip tool-search deferral."
+    },
+    "git": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-git", "--repository", "."],
+      "alwaysLoad": true,
+      "description": "Git operations (log, diff, blame, show) via MCP."
+    },
+    "memory": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-memory"],
+      "description": "Persistent knowledge graph memory across sessions."
+    },
+    "fetch": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-fetch"],
+      "description": "Fetch and convert web content to markdown."
+    }
+  }
+}
