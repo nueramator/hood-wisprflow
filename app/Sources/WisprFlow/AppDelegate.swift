@@ -17,7 +17,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let workQueue = DispatchQueue(label: "wisprflow.pipeline")
     private var engineReady = false
 
+    private let logURL = URL(fileURLWithPath: "/tmp/wisprflow.log")
+    private func log(_ s: String) {
+        let line = "[\(Date().description)] \(s)\n"
+        if let h = try? FileHandle(forWritingTo: logURL) {
+            h.seekToEndOfFile(); h.write(line.data(using: .utf8)!); try? h.close()
+        } else {
+            try? line.data(using: .utf8)!.write(to: logURL)
+        }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        try? "".data(using: .utf8)!.write(to: logURL)   // fresh log each launch
+        log("launch: AXIsProcessTrusted=\(AXIsProcessTrusted())")
+        log("bundlePath=\(Bundle.main.bundlePath)")
         setupMenuBar()
         whisper = WhisperEngine(settings: settings)
 
@@ -35,15 +48,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             do {
                 try self.whisper.start()
                 self.engineReady = true
+                self.log("whisper engine ready")
                 DispatchQueue.main.async { self.setIdle() }
             } catch {
+                self.log("whisper start FAILED: \(error)")
                 DispatchQueue.main.async { self.setStatus("⚠︎ \(error)") }
             }
         }
 
-        hotkey.onPress = { [weak self] in self?.beginRecording() }
-        hotkey.onRelease = { [weak self] in self?.endRecording() }
-        if !hotkey.start() {
+        hotkey.onPress = { [weak self] in self?.log("hotkey PRESS"); self?.beginRecording() }
+        hotkey.onRelease = { [weak self] in self?.log("hotkey RELEASE"); self?.endRecording() }
+        let tapOK = hotkey.start()
+        log("hotkey.start() -> \(tapOK)")
+        if !tapOK {
             setStatus("⚠︎ Hotkey needs Accessibility permission")
         }
     }
@@ -70,6 +87,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func endRecording() {
         guard recorder.isRecording else { return }
         let samples = recorder.stop()
+        log("endRecording: samples=\(samples.count)")
         setMenuBarSymbol(recording: false)
 
         guard samples.count > 1600 else {   // < ~0.1s → ignore
@@ -88,6 +106,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 defer { try? FileManager.default.removeItem(at: wavURL) }
 
                 let raw = try self.whisper.transcribe(wavURL: wavURL)
+                self.log("transcript=\"\(raw)\"")
                 guard !raw.isEmpty else {
                     DispatchQueue.main.async { self.hud.hide(); self.setIdle() }
                     return
